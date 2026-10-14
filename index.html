@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Imposteur</title>
+<style>
+:root{--bg:#0f1117;--card:#1a1d27;--line:#2a2e3b;--txt:#e8e8ee;--mut:#9095a8;--acc:#e5484d;--btn:#2b6cff}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);font:16px/1.5 system-ui,sans-serif;display:flex;justify-content:center;padding:24px 16px}
+main{width:100%;max-width:560px}
+h1{font-size:28px;margin:0 0 4px}h1 span{color:var(--acc)}
+.sub{color:var(--mut);margin:0 0 20px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:14px}
+input{width:100%;padding:12px;border-radius:8px;border:1px solid var(--line);background:#11131a;color:var(--txt);font-size:16px}
+button{padding:12px 16px;border:0;border-radius:8px;background:var(--btn);color:#fff;font-size:15px;font-weight:600;cursor:pointer;margin-top:10px}
+button:disabled{opacity:.4;cursor:default}
+button.ghost{background:transparent;border:1px solid var(--line);color:var(--txt)}
+button.red{background:var(--acc)}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.cats button{flex:1 1 45%;background:#232735;border:2px solid transparent}
+.cats button.sel{border-color:var(--btn);background:#1f2a4a}
+.players{list-style:none;padding:0;margin:0}
+.players li{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line)}
+.word{font-size:34px;font-weight:800;text-align:center;padding:24px 0}
+.mut{color:var(--mut);font-size:14px}
+.link{word-break:break-all;background:#11131a;padding:10px;border-radius:8px;font-size:14px}
+.vote button{display:block;width:100%;text-align:left;background:#232735}
+.vote button.sel{background:var(--acc)}
+.err{color:var(--acc)}
+.tag{font-size:12px;background:#2a2e3b;padding:2px 8px;border-radius:99px;margin-left:6px}
+</style>
+</head>
+<body>
+<main>
+<h1>L'<span>Imposteur</span></h1>
+<p class="sub">Tout le monde a le même mot… sauf un.</p>
+<div id="app"><div class="card mut">Chargement…</div></div>
+</main>
+<script type="module">
+import {initializeApp} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {getDatabase,ref,get,set,update,onValue,onDisconnect} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+const db=getDatabase(initializeApp({databaseURL:"https://imposteur-9c143-default-rtdb.europe-west1.firebasedatabase.app"}));
+
+// ===== Paires de mots (proches mais différents) =====
+const CATS={
+ "Animes":"Naruto|Bleach,One Piece|Fairy Tail,Death Note|Code Geass,Attack on Titan|Tokyo Ghoul,Dragon Ball Z|Dragon Ball Super,Hunter x Hunter|Jujutsu Kaisen,Demon Slayer|Jujutsu Kaisen,My Hero Academia|One Punch Man,Fullmetal Alchemist|Fire Force,Sword Art Online|Log Horizon,Haikyuu|Kuroko no Basket,Chainsaw Man|Hell's Paradise,Spy x Family|Kaguya-sama,Vinland Saga|Berserk,Dr. Stone|Fullmetal Alchemist,Black Clover|Fairy Tail,Mob Psycho 100|One Punch Man,Solo Leveling|Sword Art Online,Blue Lock|Captain Tsubasa,Pokémon|Digimon",
+ "Personnages LoL":"Ahri|Lux,Yasuo|Yone,Garen|Darius,Ashe|Sejuani,Jinx|Vi,Zed|Shen,Thresh|Blitzcrank,Lee Sin|Udyr,Teemo|Rumble,Katarina|Talon,Ezreal|Lucian,Caitlyn|Jhin,Annie|Brand,Morgana|Kayle,Nasus|Renekton,Riven|Fiora,Leona|Diana,Master Yi|Tryndamere,Draven|Darius,Kai'Sa|Kha'Zix,Malphite|Galio,Sona|Seraphine",
+ "Objets":"Fourchette|Cuillère,Chaise|Tabouret,Stylo|Crayon,Téléphone|Tablette,Oreiller|Coussin,Brosse à dents|Peigne,Lampe|Bougie,Montre|Bracelet,Valise|Sac à dos,Tasse|Verre,Ciseaux|Couteau,Clé|Cadenas,Parapluie|Imperméable,Miroir|Fenêtre,Casque|Écouteurs,Clavier|Manette,Réfrigérateur|Congélateur,Marteau|Tournevis,Livre|Cahier,Ballon|Raquette,Tapis|Serviette,Bouteille|Gourde",
+ "Jeux vidéo":"League of Legends|Dota 2,Rocket League|FIFA,Fortnite|PUBG,Minecraft|Terraria,Call of Duty|Battlefield,GTA V|Red Dead Redemption,Valorant|Counter-Strike,The Witcher 3|Skyrim,Mario Kart|Crash Team Racing,Dofus|Wakfu,Overwatch|Apex Legends,Elden Ring|Dark Souls,Pokémon|Yu-Gi-Oh,Clash Royale|Clash of Clans,Among Us|Fall Guys,Zelda|Final Fantasy,Hollow Knight|Celeste,Tetris|Candy Crush,Street Fighter|Tekken,Rematch|Rocket League,World of Warcraft|Dofus",
+ "Personnages Dofus":"Iop|Sacrieur,Crâ|Ouginak,Eniripsa|Sadida,Sram|Roublard,Xélor|Eliotrope,Ecaflip|Enutrof,Féca|Pandawa,Osamodas|Sadida,Zobal|Steamer,Huppermage|Xélor,Bouftou|Tofu,Bouftou royal|Tofu royal,Arakne|Larve,Pious|Chafer,Craqueleur|Gelée,Dragodinde|Muldo,Bwork|Wabbit,Kralamoure|Moon,Comte Harebourg|Ougah,Forgelance|Iop"
+};
+const PAIRS={};for(const c in CATS)PAIRS[c]=CATS[c].split(",").map(p=>p.split("|"));
+
+// ===== Utilitaires =====
+const $=s=>document.querySelector(s);
+const app=$("#app");
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const rid=n=>Math.random().toString(36).slice(2,2+n);
+const ROOM=(new URLSearchParams(location.search).get("salle")||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
+let code=ROOM, me=null, S=null, revealing=false;
+const R=p=>ref(db,"rooms/"+code+(p?"/"+p:""));
+const fail=m=>{app.innerHTML=`<div class="card err">${m}</div>`};
+
+// ===== Accueil =====
+async function home(){
+ // reconnexion automatique si on était déjà dans cette salle (rechargement de page)
+ const saved=code&&localStorage.getItem("imp_"+code);
+ if(saved){me=saved;return enter()}
+ app.innerHTML=`<div class="card">
+ <p>${code?`Tu rejoins la salle <b>${esc(code)}</b>.`:"Crée une salle et envoie le lien à tes potes."}</p>
+ <input id="nm" maxlength="16" placeholder="Ton pseudo">
+ <button id="go">${code?"Rejoindre":"Créer la salle"}</button>
+ <p id="er" class="err"></p></div>`;
+ $("#nm").focus();
+ $("#nm").onkeydown=e=>{if(e.key==="Enter")$("#go").click()};
+ $("#go").onclick=async()=>{
+  const name=$("#nm").value.trim();
+  if(!name){$("#er").textContent="Entre un pseudo.";return}
+  $("#go").disabled=true;$("#er").textContent="Connexion…";
+  try{
+   me=rid(10);
+   if(!code){
+    code=rid(5).toUpperCase();
+    await set(R(),{host:me,phase:"lobby",round:0,created:Date.now()});
+    history.replaceState(null,"","?salle="+code);
+   }else{
+    const snap=await get(R());
+    if(!snap.exists()){$("#er").textContent="Salle introuvable. Vérifie le lien.";$("#go").disabled=false;return}
+    const ps=Object.values(snap.val().players||{}).filter(p=>p.online);
+    if(ps.length>=8){$("#er").textContent="La salle est pleine (8 max).";$("#go").disabled=false;return}
+   }
+   await set(R("players/"+me),{name,score:0,online:true,joined:Date.now()});
+   localStorage.setItem("imp_"+code,me);
+   enter();
+  }catch(e){$("#er").textContent="Erreur de connexion : "+e.message;$("#go").disabled=false}
+ };
+}
+
+async function enter(){
+ try{
+  const p=await get(R("players/"+me));
+  if(!p.exists()){localStorage.removeItem("imp_"+code);me=null;return home()}
+  await update(R("players/"+me),{online:true});
+  onDisconnect(R("players/"+me+"/online")).set(false);
+  onValue(R(),snap=>{S=snap.val();if(!S)return fail("Cette salle n'existe plus.");tick();render()});
+ }catch(e){fail("Erreur de connexion : "+esc(e.message))}
+}
+
+// ===== Logique du chef =====
+const isHost=()=>S&&S.host===me;
+const online=()=>Object.entries(S.players||{}).filter(([,p])=>p.online).sort((a,b)=>a[1].joined-b[1].joined);
+
+async function startRound(){
+ const ids=online().map(([id])=>id);
+ const list=PAIRS[S.cat];
+ let used=(S.used&&S.used[S.cat])||[];
+ if(used.length>=list.length)used=[];
+ let i;do{i=Math.floor(Math.random()*list.length)}while(used.includes(i));
+ const pair=Math.random()<.5?list[i]:[list[i][1],list[i][0]];
+ const imp=ids[Math.floor(Math.random()*ids.length)];
+ const words={};ids.forEach(id=>words[id]=id===imp?pair[1]:pair[0]);
+ await update(R(),{phase:"word",round:(S.round||0)+1,words,imp,civ:pair[0],impw:pair[1],votes:null,result:null,["used/"+S.cat]:[...used,i]});
+}
+async function reveal(){
+ if(revealing)return;revealing=true;
+ const count={};for(const v of Object.values(S.votes||{}))count[v]=(count[v]||0)+1;
+ const max=Math.max(0,...Object.values(count));
+ const top=Object.keys(count).filter(k=>count[k]===max);
+ const caught=top.length===1&&top[0]===S.imp;
+ const u={phase:"reveal",result:{caught,count}};
+ for(const [id,p] of Object.entries(S.players||{})){
+  if(!(S.words&&S.words[id]))continue;
+  if(caught&&id!==S.imp)u["players/"+id+"/score"]=(p.score||0)+1;
+  if(!caught&&id===S.imp)u["players/"+id+"/score"]=(p.score||0)+2;
+ }
+ await update(R(),u);revealing=false;
+}
+// le chef révèle automatiquement quand tout le monde a voté
+function tick(){
+ if(!isHost()||S.phase!=="vote")return;
+ const ids=online().map(([id])=>id).filter(id=>S.words&&S.words[id]);
+ if(ids.length&&ids.every(id=>S.votes&&S.votes[id]))reveal();
+}
+const A={
+ cat:c=>update(R(),{cat:c}),
+ start:startRound,
+ toVote:()=>update(R(),{phase:"vote",votes:null}),
+ reveal:reveal,
+ next:()=>update(R(),{phase:"lobby",words:null,votes:null,imp:null,result:null}),
+ vote:t=>set(R("votes/"+me),t)
+};
+
+// ===== Affichage =====
+function playersList(showVote){
+ return`<ul class="players">${online().map(([id,p])=>`<li><span>${esc(p.name)}${id===S.host?'<span class="tag">chef</span>':""}${id===me?'<span class="tag">toi</span>':""}</span><span>${showVote?(S.votes&&S.votes[id]?"✅":"⏳"):(p.score||0)+" pt"}</span></li>`).join("")}</ul>`;
+}
+function render(){
+ const n=online().length,host=isHost(),myWord=S.words&&S.words[me];let h="";
+ if(S.phase==="lobby"){
+  if(host){
+   const link=location.origin+location.pathname+"?salle="+code;
+   h+=`<div class="card"><b>Lien à envoyer sur Discord :</b><div class="link" id="lk">${esc(link)}</div><button class="ghost" id="cp">Copier le lien</button></div>
+   <div class="card"><b>Choisis la catégorie</b><div class="row cats">${Object.keys(CATS).map(c=>`<button data-c="${esc(c)}" class="${S.cat===c?"sel":""}">${esc(c)}</button>`).join("")}</div>
+   <button id="st" ${!S.cat||n<3?"disabled":""}>Lancer la manche</button><p class="mut">${n<3?"Il faut au moins 3 joueurs.":""}</p></div>`;
+  }else h+=`<div class="card">En attente du chef… ${S.cat?`Catégorie : <b>${esc(S.cat)}</b>`:""}</div>`;
+  h+=`<div class="card"><b>Joueurs (${n}/8)</b>${playersList(false)}</div>`;
+ }
+ else if(!myWord&&S.phase!=="reveal"){
+  h+=`<div class="card">Une manche est en cours. Tu joueras à la prochaine !</div><div class="card"><b>Scores</b>${playersList(false)}</div>`;
+ }
+ else if(S.phase==="word"){
+  h+=`<div class="card"><p class="mut">Manche ${S.round} · ${esc(S.cat)} · ton mot (ne le montre à personne) :</p><div class="word">${esc(myWord)}</div>
+  <p class="mut">Chacun donne un indice à tour de rôle sur Discord. Tu ne sais pas si tu es l'imposteur !</p>
+  ${host?'<button id="tv">Passer au vote</button>':""}</div><div class="card"><b>Scores</b>${playersList(false)}</div>`;
+ }
+ else if(S.phase==="vote"){
+  const mv=S.votes&&S.votes[me];
+  h+=`<div class="card"><p class="mut">Ton mot : <b>${esc(myWord)}</b></p><b>Qui est l'imposteur ?</b><div class="vote">${online().filter(([id])=>id!==me&&S.words&&S.words[id]).map(([id,p])=>`<button data-v="${id}" class="${mv===id?"sel":""}">${esc(p.name)}</button>`).join("")}</div></div>
+  <div class="card"><b>Votes</b>${playersList(true)}${host?'<button class="red" id="rv">Révéler maintenant</button>':""}</div>`;
+ }
+ else if(S.phase==="reveal"){
+  const r=S.result||{count:{}},imp=(S.players||{})[S.imp];
+  h+=`<div class="card" style="text-align:center"><p class="mut">L'imposteur était…</p><div class="word">${esc(imp?imp.name:"?")}</div>
+  <p>${r.caught?"🎯 Démasqué ! +1 point pour chaque civil.":"😈 Il s'en sort ! +2 points pour l'imposteur."}</p>
+  <p class="mut">Mot des civils : <b>${esc(S.civ)}</b> · Mot de l'imposteur : <b>${esc(S.impw)}</b></p></div>
+  <div class="card"><b>Votes reçus</b><ul class="players">${online().map(([id,p])=>`<li><span>${esc(p.name)}</span><span>${(r.count||{})[id]||0}</span></li>`).join("")}</ul></div>
+  <div class="card"><b>Scores</b>${playersList(false)}${host?'<button id="nx">Manche suivante</button>':'<p class="mut">Le chef lance la manche suivante.</p>'}</div>`;
+ }
+ app.innerHTML=h;
+ document.querySelectorAll("[data-c]").forEach(b=>b.onclick=()=>A.cat(b.dataset.c));
+ document.querySelectorAll("[data-v]").forEach(b=>b.onclick=()=>A.vote(b.dataset.v));
+ const on=(id,f)=>{const e=$(id);if(e)e.onclick=f};
+ on("#st",A.start);on("#tv",A.toVote);on("#rv",A.reveal);on("#nx",A.next);
+ on("#cp",()=>{navigator.clipboard.writeText($("#lk").textContent);$("#cp").textContent="Copié ✓"});
+}
+home();
+</script>
+</body>
+</html>

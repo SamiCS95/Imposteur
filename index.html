@@ -208,7 +208,7 @@ function render(){
  else if(S.phase==="guess"){
   const imp=(S.players||{})[S.imp];
   if(me===S.imp)h+=`<div class="card"><div class="word" style="color:var(--acc)">Tu as été démasqué !</div><p>Dernière chance : devine le mot des civils pour gagner quand même.</p><form id="gf"><input id="gi" maxlength="40" placeholder="Ton mot…" autocomplete="off"><button>Valider</button></form></div>`;
-  else h+=`<div class="card" style="text-align:center"><p class="mut">Démasqué !</p><div class="word">${esc(imp?imp.name:"?")}</div><p>L'imposteur n'avait pas de mot… il tente de deviner le vôtre ⏳</p></div>`;
+  else h+=`<div class="card" style="text-align:center"><p class="mut">Démasqué !</p><div class="word">${esc(imp?imp.name:"?")}</div><p>L'imposteur n'avait pas de mot… il tente de deviner le vôtre ⏳</p>${host?'<button class="ghost" id="sk">⏭️ Il ne répond pas : terminer la manche</button>':""}</div>`;
   h+=`<div class="card"><b>Scores</b>${playersList(false)}</div>`;
  }
  else if(!myWord&&S.phase!=="reveal"){
@@ -227,7 +227,7 @@ function render(){
    h+=`<div class="result ${won?"win":"lose"}">${won?"🏆 Vous avez gagné !":"💀 Vous avez perdu…"}</div>`;
   }
   h+=`<div class="card" style="text-align:center"><p class="mut">L'imposteur était…</p><div class="word">${esc(imp?imp.name:"?")}</div>
-  <p>${!r.caught?"😈 Il s'en sort ! +2 points pour l'imposteur.":r.guess!==undefined?(r.guessed?`🧠 Démasqué… mais il a deviné « ${esc(r.guess)} » ! +2 points pour l'imposteur.`:`🎯 Démasqué, et il a proposé « ${esc(r.guess)} » : raté ! +1 point pour chaque civil.`):"🎯 Démasqué ! +1 point pour chaque civil."}</p>
+  <p>${!r.caught?"😈 Il s'en sort ! +2 points pour l'imposteur.":r.guess!==undefined?(r.guessed?`🧠 Démasqué… mais il a deviné « ${esc(r.guess)} » ! +2 points pour l'imposteur.`:(r.guess?`🎯 Démasqué, et il a proposé « ${esc(r.guess)} » : raté ! +1 point pour chaque civil.`:"🎯 Démasqué, et il n'a pas répondu ! +1 point pour chaque civil.")):"🎯 Démasqué ! +1 point pour chaque civil."}</p>
   <p class="mut">Mot des civils : <b>${esc(S.civ)}</b> · Mot de l'imposteur : <b>${S.impw?esc(S.impw):"aucun"}</b></p></div>
   <div class="card"><b>Votes reçus</b><ul class="players">${online().map(([id,p])=>`<li><span>${esc(p.name)}</span><span>${(r.count||{})[id]||0}</span></li>`).join("")}</ul></div>
   <div class="card"><b>Scores</b>${playersList(false)}${host?'<button id="nx">Manche suivante</button>':'<p class="mut">Le chef lance la manche suivante.</p>'}</div>`;
@@ -238,7 +238,7 @@ function render(){
  document.querySelectorAll("[data-c]").forEach(b=>b.onclick=()=>A.cat(b.dataset.c));
  document.querySelectorAll("[data-v]").forEach(b=>b.onclick=()=>A.vote(b.dataset.v));
  const on=(id,f)=>{const e=$(id);if(e)e.onclick=f};
- on("#st",A.start);on("#tv",A.toVote);on("#rv",A.reveal);on("#nx",A.next);on("#rr",A.reroll);
+ on("#st",A.start);on("#tv",A.toVote);on("#rv",A.reveal);on("#nx",A.next);on("#rr",A.reroll);on("#sk",()=>{if(confirm("Terminer sans réponse ? Ça compte comme une mauvaise réponse."))submitGuess("")});
  document.querySelectorAll("[data-m]").forEach(b=>b.onclick=()=>A.mode(b.dataset.m));
  const gf=$("#gf");if(gf){$("#gi").focus();gf.onsubmit=e=>{e.preventDefault();const g=$("#gi").value.trim();if(g){gf.querySelector("button").disabled=true;submitGuess(g)}}}
  on("#cp",()=>{navigator.clipboard.writeText($("#lk").textContent);$("#cp").textContent="Copié ✓"});

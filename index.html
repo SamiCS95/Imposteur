@@ -21,6 +21,9 @@ button.red{background:var(--acc)}
 .cats button{flex:1 1 45%;background:#232735;border:2px solid transparent}
 .tabs button{flex:1;background:#232735;border:2px solid transparent}
 .tabs button.sel{border-color:var(--acc);background:#3a1d22}
+.turn{text-align:center;border-color:var(--btn)}
+.turn.mine{border-color:var(--acc);background:#2a1a1e}
+.tname{font-size:22px;font-weight:700;margin:4px 0}
 .cats button.sel{border-color:var(--btn);background:#1f2a4a}
 .players{list-style:none;padding:0;margin:0}
 .players li{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line)}
@@ -138,7 +141,7 @@ async function startRound(reroll){
  const imp=ids[Math.floor(Math.random()*ids.length)];
  const blank=S.mode==="blank";
  const words={};ids.forEach(id=>words[id]=id===imp?(blank?"__BLANK__":pair[1]):pair[0]);
- await update(R(),{phase:"word",round:reroll===true?(S.round||1):(S.round||0)+1,words,imp,civ:pair[0],impw:blank?null:pair[1],votes:null,result:null,["used/"+S.cat]:[...used,i]});
+ await update(R(),{phase:"word",round:reroll===true?(S.round||1):(S.round||0)+1,words,order:[...ids].sort(()=>Math.random()-.5),turn:0,imp,civ:pair[0],impw:blank?null:pair[1],votes:null,result:null,["used/"+S.cat]:[...used,i]});
 }
 async function reveal(){
  if(revealing)return;revealing=true;
@@ -178,6 +181,8 @@ const A={
  cat:c=>update(R(),{cat:c}),
  start:()=>startRound(false),
  mode:m=>update(R(),{mode:m}),
+ turnDone:()=>update(R(),{turn:(S.turn||0)+1}),
+ turnAgain:()=>update(R(),{turn:0}),
  reroll:async()=>{
   if(!confirm("Changer les mots pour tout le monde ? Les votes seront remis à zéro."))return;
   await startRound(true);
@@ -216,6 +221,17 @@ function render(){
  }
  else if(S.phase==="word"||S.phase==="vote"){
   const mv=S.votes&&S.votes[me];
+  const order=(S.order||[]).filter(id=>S.players&&S.players[id]);
+  const t=S.turn||0, cur=order[t], curName=cur?S.players[cur].name:"";
+  if(order.length){
+   if(cur){
+    h+=`<div class="card turn ${cur===me?"mine":""}"><div class="mut">Tour ${t+1}/${order.length}</div><div class="tname">${cur===me?"🎤 C'est ton tour !":"C'est le tour de : <b>"+esc(curName)+"</b>"}</div>
+    <p class="mut">Ordre : ${order.map((id,i)=>`<span style="${i===t?"color:var(--txt);font-weight:700":i<t?"text-decoration:line-through":""}">${esc(S.players[id].name)}</span>`).join(" → ")}</p>
+    ${cur===me?'<button id="td">✅ J\'ai donné mon indice</button>':(host?'<button class="ghost" id="td">⏭️ Passer son tour</button>':"")}</div>`;
+   }else{
+    h+=`<div class="card turn"><div class="tname">🗳️ Tout le monde a parlé : votez !</div>${host?'<button class="ghost" id="ta">🔁 Nouveau tour d\'indices</button>':""}</div>`;
+   }
+  }
   h+=`<div class="card"><p class="mut">Manche ${S.round} · ${esc(S.cat)} · ton mot (ne le montre à personne) :</p>${myWord==="__BLANK__"?`<div class="word" style="color:var(--acc)">🕵️ Tu es l'imposteur !</div><p>Tu n'as pas de mot. Écoute les indices des autres, invente des indices crédibles et essaie de deviner le mot.</p>`:`<div class="word">${esc(myWord)}</div>`}<p class="mut">Donnez vos indices sur Discord ou dans le chat, puis votez. Tu peux changer ton vote tant que tout le monde n'a pas voté.</p></div>
   <div class="card"><b>🗳️ Qui est l'imposteur ?</b><div class="vote">${online().filter(([id])=>id!==me&&S.words&&S.words[id]).map(([id,p])=>`<button data-v="${id}" class="${mv===id?"sel":""}">${esc(p.name)}</button>`).join("")}</div></div>
   <div class="card"><b>Votes</b>${playersList(true)}${host?'<button class="red" id="rv">Révéler maintenant</button> <button class="ghost" id="rr">🔄 Changer les mots</button>':""}</div>`;
@@ -238,7 +254,7 @@ function render(){
  document.querySelectorAll("[data-c]").forEach(b=>b.onclick=()=>A.cat(b.dataset.c));
  document.querySelectorAll("[data-v]").forEach(b=>b.onclick=()=>A.vote(b.dataset.v));
  const on=(id,f)=>{const e=$(id);if(e)e.onclick=f};
- on("#st",A.start);on("#tv",A.toVote);on("#rv",A.reveal);on("#nx",A.next);on("#rr",A.reroll);on("#sk",()=>{if(confirm("Terminer sans réponse ? Ça compte comme une mauvaise réponse."))submitGuess("")});
+ on("#st",A.start);on("#tv",A.toVote);on("#rv",A.reveal);on("#nx",A.next);on("#rr",A.reroll);on("#td",A.turnDone);on("#ta",A.turnAgain);on("#sk",()=>{if(confirm("Terminer sans réponse ? Ça compte comme une mauvaise réponse."))submitGuess("")});
  document.querySelectorAll("[data-m]").forEach(b=>b.onclick=()=>A.mode(b.dataset.m));
  const gf=$("#gf");if(gf){$("#gi").focus();gf.onsubmit=e=>{e.preventDefault();const g=$("#gi").value.trim();if(g){gf.querySelector("button").disabled=true;submitGuess(g)}}}
  on("#cp",()=>{navigator.clipboard.writeText($("#lk").textContent);$("#cp").textContent="Copié ✓"});

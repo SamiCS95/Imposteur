@@ -152,7 +152,7 @@ async function reveal(){
 }
 // le chef révèle automatiquement quand tout le monde a voté
 function tick(){
- if(!isHost()||S.phase!=="vote")return;
+ if(!isHost()||(S.phase!=="vote"&&S.phase!=="word"))return;
  const ids=online().map(([id])=>id).filter(id=>S.words&&S.words[id]);
  if(ids.length&&ids.every(id=>S.votes&&S.votes[id]))reveal();
 }
@@ -183,14 +183,10 @@ function render(){
  else if(!myWord&&S.phase!=="reveal"){
   h+=`<div class="card">Une manche est en cours. Tu joueras à la prochaine !</div><div class="card"><b>Scores</b>${playersList(false)}</div>`;
  }
- else if(S.phase==="word"){
-  h+=`<div class="card"><p class="mut">Manche ${S.round} · ${esc(S.cat)} · ton mot (ne le montre à personne) :</p><div class="word">${esc(myWord)}</div>
-  <p class="mut">Chacun donne un indice à tour de rôle sur Discord. Tu ne sais pas si tu es l'imposteur !</p>
-  ${host?'<button id="tv">Passer au vote</button>':""}</div><div class="card"><b>Scores</b>${playersList(false)}</div>`;
- }
- else if(S.phase==="vote"){
+ else if(S.phase==="word"||S.phase==="vote"){
   const mv=S.votes&&S.votes[me];
-  h+=`<div class="card"><p class="mut">Ton mot : <b>${esc(myWord)}</b></p><b>Qui est l'imposteur ?</b><div class="vote">${online().filter(([id])=>id!==me&&S.words&&S.words[id]).map(([id,p])=>`<button data-v="${id}" class="${mv===id?"sel":""}">${esc(p.name)}</button>`).join("")}</div></div>
+  h+=`<div class="card"><p class="mut">Manche ${S.round} · ${esc(S.cat)} · ton mot (ne le montre à personne) :</p><div class="word">${esc(myWord)}</div><p class="mut">Donnez vos indices sur Discord ou dans le chat, puis votez. Tu peux changer ton vote tant que tout le monde n'a pas voté.</p></div>
+  <div class="card"><b>🗳️ Qui est l'imposteur ?</b><div class="vote">${online().filter(([id])=>id!==me&&S.words&&S.words[id]).map(([id,p])=>`<button data-v="${id}" class="${mv===id?"sel":""}">${esc(p.name)}</button>`).join("")}</div></div>
   <div class="card"><b>Votes</b>${playersList(true)}${host?'<button class="red" id="rv">Révéler maintenant</button>':""}</div>`;
  }
  else if(S.phase==="reveal"){

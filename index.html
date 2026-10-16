@@ -19,6 +19,8 @@ button.ghost{background:transparent;border:1px solid var(--line);color:var(--txt
 button.red{background:var(--acc)}
 .row{display:flex;gap:8px;flex-wrap:wrap}
 .cats button{flex:1 1 45%;background:#232735;border:2px solid transparent}
+.tabs button{flex:1;background:#232735;border:2px solid transparent}
+.tabs button.sel{border-color:var(--acc);background:#3a1d22}
 .cats button.sel{border-color:var(--btn);background:#1f2a4a}
 .players{list-style:none;padding:0;margin:0}
 .players li{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line)}
@@ -134,8 +136,9 @@ async function startRound(reroll){
  let i;do{i=Math.floor(Math.random()*list.length)}while(used.includes(i));
  const pair=Math.random()<.5?list[i]:[list[i][1],list[i][0]];
  const imp=ids[Math.floor(Math.random()*ids.length)];
- const words={};ids.forEach(id=>words[id]=id===imp?pair[1]:pair[0]);
- await update(R(),{phase:"word",round:reroll===true?(S.round||1):(S.round||0)+1,words,imp,civ:pair[0],impw:pair[1],votes:null,result:null,["used/"+S.cat]:[...used,i]});
+ const blank=S.mode==="blank";
+ const words={};ids.forEach(id=>words[id]=id===imp?(blank?"__BLANK__":pair[1]):pair[0]);
+ await update(R(),{phase:"word",round:reroll===true?(S.round||1):(S.round||0)+1,words,imp,civ:pair[0],impw:blank?null:pair[1],votes:null,result:null,["used/"+S.cat]:[...used,i]});
 }
 async function reveal(){
  if(revealing)return;revealing=true;
@@ -143,6 +146,9 @@ async function reveal(){
  const max=Math.max(0,...Object.values(count));
  const top=Object.keys(count).filter(k=>count[k]===max);
  const caught=top.length===1&&top[0]===S.imp;
+ if(caught&&S.mode==="blank"&&S.words&&S.words[S.imp]==="__BLANK__"){
+  await update(R(),{phase:"guess",result:{caught,count}});revealing=false;return;
+ }
  const u={phase:"reveal",result:{caught,count}};
  for(const [id,p] of Object.entries(S.players||{})){
   if(!(S.words&&S.words[id]))continue;
@@ -150,6 +156,17 @@ async function reveal(){
   if(!caught&&id===S.imp)u["players/"+id+"/score"]=(p.score||0)+2;
  }
  await update(R(),u);revealing=false;
+}
+const norm=t=>String(t||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]/g,"");
+async function submitGuess(g){
+ const ok=norm(g)!==""&&norm(g)===norm(S.civ);
+ const u={phase:"reveal",result:{...(S.result||{}),caught:true,guess:String(g).slice(0,40),guessed:ok}};
+ for(const [id,p] of Object.entries(S.players||{})){
+  if(!(S.words&&S.words[id]))continue;
+  if(ok&&id===S.imp)u["players/"+id+"/score"]=(p.score||0)+2;
+  if(!ok&&id!==S.imp)u["players/"+id+"/score"]=(p.score||0)+1;
+ }
+ await update(R(),u);
 }
 // le chef révèle automatiquement quand tout le monde a voté
 function tick(){
@@ -160,6 +177,7 @@ function tick(){
 const A={
  cat:c=>update(R(),{cat:c}),
  start:()=>startRound(false),
+ mode:m=>update(R(),{mode:m}),
  reroll:async()=>{
   if(!confirm("Changer les mots pour tout le monde ? Les votes seront remis à zéro."))return;
   await startRound(true);
@@ -181,37 +199,48 @@ function render(){
   if(host){
    const link=location.origin+location.pathname+"?salle="+code;
    h+=`<div class="card"><b>Lien à envoyer sur Discord :</b><div class="link" id="lk">${esc(link)}</div><button class="ghost" id="cp">Copier le lien</button></div>
+   <div class="card"><b>Mode de jeu</b><div class="row tabs"><button data-m="classic" class="${S.mode!=="blank"?"sel":""}">🎭 Classique</button><button data-m="blank" class="${S.mode==="blank"?"sel":""}">❓ Sans mot</button></div><p class="mut">${S.mode==="blank"?"L'imposteur n'a AUCUN mot : il doit écouter les indices et deviner. S'il est démasqué, il a une dernière chance : deviner le mot des civils.":"L'imposteur a un mot proche de celui des civils, sans savoir qu'il est l'imposteur."}</p></div>
    <div class="card"><b>Choisis la catégorie</b><div class="row cats">${Object.keys(CATS).map(c=>`<button data-c="${esc(c)}" class="${S.cat===c?"sel":""}">${esc(c)}</button>`).join("")}</div>
    <button id="st" ${!S.cat||n<3?"disabled":""}>Lancer la manche</button><p class="mut">${n<3?"Il faut au moins 3 joueurs.":""}</p></div>`;
-  }else h+=`<div class="card">En attente du chef… ${S.cat?`Catégorie : <b>${esc(S.cat)}</b>`:""}</div>`;
+  }else h+=`<div class="card">En attente du chef… <br>Mode : <b>${S.mode==="blank"?"❓ Sans mot":"🎭 Classique"}</b>${S.cat?` · Catégorie : <b>${esc(S.cat)}</b>`:""}</div>`;
   h+=`<div class="card"><b>Joueurs (${n}/8)</b>${playersList(false)}</div>`;
+ }
+ else if(S.phase==="guess"){
+  const imp=(S.players||{})[S.imp];
+  if(me===S.imp)h+=`<div class="card"><div class="word" style="color:var(--acc)">Tu as été démasqué !</div><p>Dernière chance : devine le mot des civils pour gagner quand même.</p><form id="gf"><input id="gi" maxlength="40" placeholder="Ton mot…" autocomplete="off"><button>Valider</button></form></div>`;
+  else h+=`<div class="card" style="text-align:center"><p class="mut">Démasqué !</p><div class="word">${esc(imp?imp.name:"?")}</div><p>L'imposteur n'avait pas de mot… il tente de deviner le vôtre ⏳</p></div>`;
+  h+=`<div class="card"><b>Scores</b>${playersList(false)}</div>`;
  }
  else if(!myWord&&S.phase!=="reveal"){
   h+=`<div class="card">Une manche est en cours. Tu joueras à la prochaine !</div><div class="card"><b>Scores</b>${playersList(false)}</div>`;
  }
  else if(S.phase==="word"||S.phase==="vote"){
   const mv=S.votes&&S.votes[me];
-  h+=`<div class="card"><p class="mut">Manche ${S.round} · ${esc(S.cat)} · ton mot (ne le montre à personne) :</p><div class="word">${esc(myWord)}</div><p class="mut">Donnez vos indices sur Discord ou dans le chat, puis votez. Tu peux changer ton vote tant que tout le monde n'a pas voté.</p></div>
+  h+=`<div class="card"><p class="mut">Manche ${S.round} · ${esc(S.cat)} · ton mot (ne le montre à personne) :</p>${myWord==="__BLANK__"?`<div class="word" style="color:var(--acc)">🕵️ Tu es l'imposteur !</div><p>Tu n'as pas de mot. Écoute les indices des autres, invente des indices crédibles et essaie de deviner le mot.</p>`:`<div class="word">${esc(myWord)}</div>`}<p class="mut">Donnez vos indices sur Discord ou dans le chat, puis votez. Tu peux changer ton vote tant que tout le monde n'a pas voté.</p></div>
   <div class="card"><b>🗳️ Qui est l'imposteur ?</b><div class="vote">${online().filter(([id])=>id!==me&&S.words&&S.words[id]).map(([id,p])=>`<button data-v="${id}" class="${mv===id?"sel":""}">${esc(p.name)}</button>`).join("")}</div></div>
   <div class="card"><b>Votes</b>${playersList(true)}${host?'<button class="red" id="rv">Révéler maintenant</button> <button class="ghost" id="rr">🔄 Changer les mots</button>':""}</div>`;
  }
  else if(S.phase==="reveal"){
   const r=S.result||{count:{}},imp=(S.players||{})[S.imp];
   if(myWord){
-   const won=(me===S.imp)!==!!r.caught;
+   const impWins=!r.caught||!!r.guessed;const won=(me===S.imp)===impWins;
    h+=`<div class="result ${won?"win":"lose"}">${won?"🏆 Vous avez gagné !":"💀 Vous avez perdu…"}</div>`;
   }
   h+=`<div class="card" style="text-align:center"><p class="mut">L'imposteur était…</p><div class="word">${esc(imp?imp.name:"?")}</div>
-  <p>${r.caught?"🎯 Démasqué ! +1 point pour chaque civil.":"😈 Il s'en sort ! +2 points pour l'imposteur."}</p>
-  <p class="mut">Mot des civils : <b>${esc(S.civ)}</b> · Mot de l'imposteur : <b>${esc(S.impw)}</b></p></div>
+  <p>${!r.caught?"😈 Il s'en sort ! +2 points pour l'imposteur.":r.guess!==undefined?(r.guessed?`🧠 Démasqué… mais il a deviné « ${esc(r.guess)} » ! +2 points pour l'imposteur.`:`🎯 Démasqué, et il a proposé « ${esc(r.guess)} » : raté ! +1 point pour chaque civil.`):"🎯 Démasqué ! +1 point pour chaque civil."}</p>
+  <p class="mut">Mot des civils : <b>${esc(S.civ)}</b> · Mot de l'imposteur : <b>${S.impw?esc(S.impw):"aucun"}</b></p></div>
   <div class="card"><b>Votes reçus</b><ul class="players">${online().map(([id,p])=>`<li><span>${esc(p.name)}</span><span>${(r.count||{})[id]||0}</span></li>`).join("")}</ul></div>
   <div class="card"><b>Scores</b>${playersList(false)}${host?'<button id="nx">Manche suivante</button>':'<p class="mut">Le chef lance la manche suivante.</p>'}</div>`;
  }
+ const keep=$("#gi")?$("#gi").value:null;
  app.innerHTML=h;
+ if(keep!==null&&$("#gi"))$("#gi").value=keep;
  document.querySelectorAll("[data-c]").forEach(b=>b.onclick=()=>A.cat(b.dataset.c));
  document.querySelectorAll("[data-v]").forEach(b=>b.onclick=()=>A.vote(b.dataset.v));
  const on=(id,f)=>{const e=$(id);if(e)e.onclick=f};
  on("#st",A.start);on("#tv",A.toVote);on("#rv",A.reveal);on("#nx",A.next);on("#rr",A.reroll);
+ document.querySelectorAll("[data-m]").forEach(b=>b.onclick=()=>A.mode(b.dataset.m));
+ const gf=$("#gf");if(gf){$("#gi").focus();gf.onsubmit=e=>{e.preventDefault();const g=$("#gi").value.trim();if(g){gf.querySelector("button").disabled=true;submitGuess(g)}}}
  on("#cp",()=>{navigator.clipboard.writeText($("#lk").textContent);$("#cp").textContent="Copié ✓"});
 }
 // ===== Chat (séparé de l'affichage du jeu pour ne pas effacer ce qu'on tape) =====

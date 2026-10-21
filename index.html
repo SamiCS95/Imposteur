@@ -141,7 +141,9 @@ async function startRound(reroll){
  if(used.length>=list.length)used=[];
  let i;do{i=Math.floor(Math.random()*list.length)}while(used.includes(i));
  const pair=Math.random()<.5?list[i]:[list[i][1],list[i][0]];
- const imp=ids[Math.floor(Math.random()*ids.length)];
+ if(ids.length<3){alert("Seulement "+ids.length+" joueur(s) connecté(s). Demande aux autres de recharger la page.");return}
+ const pool=ids.length>=3&&ids.includes(S.imp)?ids.filter(id=>id!==S.imp):ids;
+ const imp=pool[Math.floor(Math.random()*pool.length)];
  const blank=S.mode==="blank";
  const words={};ids.forEach(id=>words[id]=id===imp?(blank?"__BLANK__":pair[1]):pair[0]);
  await update(R(),{phase:"vote",round:reroll===true?(S.round||1):(S.round||0)+1,words,order:[...ids].sort(()=>Math.random()-.5),turn:0,imp,civ:pair[0],impw:blank?null:pair[1],votes:null,result:null,["used/"+S.cat]:[...used,i]});

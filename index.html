@@ -134,6 +134,13 @@ async function enter(){
 const isHost=()=>S&&S.host===me;
 const online=()=>Object.entries(S.players||{}).filter(([,p])=>p.online).sort((a,b)=>a[1].joined-b[1].joined);
 
+// mélange équitable (Fisher-Yates) ; l'imposteur ne parle jamais en premier
+function speakOrder(ids,imp){
+ const o=[...ids];
+ for(let i=o.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[o[i],o[j]]=[o[j],o[i]]}
+ if(o[0]===imp&&o.length>1){const j=1+Math.floor(Math.random()*(o.length-1));[o[0],o[j]]=[o[j],o[0]]}
+ return o;
+}
 async function startRound(reroll){
  const ids=online().map(([id])=>id);
  const list=PAIRS[S.cat];
@@ -146,7 +153,7 @@ async function startRound(reroll){
  const imp=pool[Math.floor(Math.random()*pool.length)];
  const blank=S.mode==="blank";
  const words={};ids.forEach(id=>words[id]=id===imp?(blank?"__BLANK__":pair[1]):pair[0]);
- await update(R(),{phase:"vote",round:reroll===true?(S.round||1):(S.round||0)+1,words,order:[...ids].sort(()=>Math.random()-.5),turn:0,imp,civ:pair[0],impw:blank?null:pair[1],votes:null,result:null,["used/"+S.cat]:[...used,i]});
+ await update(R(),{phase:"vote",round:reroll===true?(S.round||1):(S.round||0)+1,words,order:speakOrder(ids,imp),turn:0,imp,civ:pair[0],impw:blank?null:pair[1],votes:null,result:null,["used/"+S.cat]:[...used,i]});
 }
 async function reveal(){
  if(revealing)return;revealing=true;

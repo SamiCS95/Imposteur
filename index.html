@@ -2,6 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Imposteur</title>
 <style>
@@ -120,8 +121,10 @@ async function enter(){
  try{
   const p=await get(R("players/"+me));
   if(!p.exists()){localStorage.removeItem("imp_"+code);me=null;return home()}
-  await update(R("players/"+me),{online:true});
-  onDisconnect(R("players/"+me+"/online")).set(false);
+  onValue(ref(db,".info/connected"),c=>{
+   if(c.val()!==true)return;
+   onDisconnect(R("players/"+me+"/online")).set(false).then(()=>update(R("players/"+me),{online:true}));
+  });
   onValue(R(),snap=>{S=snap.val();if(!S)return fail("Cette salle n'existe plus.");tick();render()});
   startChat();
  }catch(e){fail("Erreur de connexion : "+esc(e.message))}
@@ -141,7 +144,7 @@ async function startRound(reroll){
  const imp=ids[Math.floor(Math.random()*ids.length)];
  const blank=S.mode==="blank";
  const words={};ids.forEach(id=>words[id]=id===imp?(blank?"__BLANK__":pair[1]):pair[0]);
- await update(R(),{phase:"word",round:reroll===true?(S.round||1):(S.round||0)+1,words,order:[...ids].sort(()=>Math.random()-.5),turn:0,imp,civ:pair[0],impw:blank?null:pair[1],votes:null,result:null,["used/"+S.cat]:[...used,i]});
+ await update(R(),{phase:"vote",round:reroll===true?(S.round||1):(S.round||0)+1,words,order:[...ids].sort(()=>Math.random()-.5),turn:0,imp,civ:pair[0],impw:blank?null:pair[1],votes:null,result:null,["used/"+S.cat]:[...used,i]});
 }
 async function reveal(){
  if(revealing)return;revealing=true;
@@ -174,7 +177,7 @@ async function submitGuess(g){
 // le chef révèle automatiquement quand tout le monde a voté
 function tick(){
  if(!isHost()||(S.phase!=="vote"&&S.phase!=="word"))return;
- const ids=online().map(([id])=>id).filter(id=>S.words&&S.words[id]);
+ const ids=online().map(([id])=>id).filter(id=>S.words&&S.words[id]);if(ids.length<2)return;
  if(ids.length&&ids.every(id=>S.votes&&S.votes[id]))reveal();
 }
 const A={
